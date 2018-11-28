@@ -1,0 +1,129 @@
+Option Explicit
+ 
+Public Sub InsertImages()
+'指定したフォルダ内の画像ファイルを一括挿入
+  Dim prs As PowerPoint.Presentation
+  Dim sld As PowerPoint.Slide
+  Dim shp As PowerPoint.Shape
+  Dim shp2 As PowerPoint.Shape
+  Dim tmp As PowerPoint.PpViewType
+  Dim fol As Object, f As Object
+  Dim fol_path As String
+  Dim fol_name As String
+  Dim a As Long
+  Dim txt As Shape
+  
+  Dim iMarginSlideEdgeLeft As Integer
+  Dim iMarginSlideEdgeTop As Integer
+  Dim iMarginSlideEdgeRight As Integer
+  Dim iMarginSlideEdgeBottom As Integer
+  
+  Dim motoWidth As Integer
+  Dim hiritsu As Double
+  
+  Dim imageTrimLeft
+  Dim imageTrimRight
+  Dim imageTrimTop
+  Dim imageTrimBottom
+
+  'スライドの余白設定
+  iMarginSlideEdgeLeft = 60
+  iMarginSlideEdgeTop = 60
+  iMarginSlideEdgeRight = 80
+  iMarginSlideEdgeBottom = 20
+  
+  'トリミング計算用
+    motoWidth = 0
+    hiritsu = 0
+  
+  '画像のトリミング
+  imageTrimLeft = 0
+  imageTrimRight = 0
+  imageTrimTop = 0
+  imageTrimBottom = 0
+   
+  Set prs = ActivePresentation
+   
+  'スライドショー表示になっていたら解除
+  If SlideShowWindows.Count > 0 Then prs.SlideShowWindow.View.Exit
+   
+  With ActiveWindow
+    tmp = .ViewType 'ウィンドウの表示モード記憶
+    .ViewType = ppViewSlide
+  End With
+   
+  '画像フォルダ取得
+  Set fol = CreateObject("Shell.Application") _
+            .BrowseForFolder(0, "画像フォルダ選択", &H10, 0)
+  If fol Is Nothing Then GoTo Fin
+  fol_path = fol.Self.Path
+   
+  'フォルダ内のファイル処理
+  With CreateObject("Scripting.FileSystemObject")
+    If Not .FolderExists(fol_path) Then GoTo Fin
+     
+    For Each f In .GetFolder(fol_path).Files
+      'JPEGとPNGファイルのみ処理
+      Select Case LCase(.GetExtensionName(f.Path))
+        Case "jpg", "jpeg", "png"
+          Set sld = prs.Slides.Add(prs.Slides.Count + 1, ppLayoutBlank)
+          sld.Select
+          Set shp = sld.Shapes.AddPicture(FileName:=f.Path, _
+                                          LinkToFile:=False, _
+                                          SaveWithDocument:=True, _
+                                          Left:=0, _
+                                          Top:=0)
+            
+          With shp
+            .LockAspectRatio = True '縦横比を固定
+            .ScaleWidth 1, msoTrue  '元画像サイズにする
+             motoWidth = .Width     '元の画像サイズの幅を記録
+            '挿入した画像をスライドのサイズに合わせる
+              .Width = prs.PageSetup.SlideWidth - (iMarginSlideEdgeLeft + iMarginSlideEdgeRight)
+            hiritsu = motoWidth / .Width
+
+            '画像の高さがスライドの高さより高い（長い）場合はスライドの高さにトリミングする
+            If .Height > prs.PageSetup.SlideHeight Then
+                imageTrimBottom = .Height - (prs.PageSetup.SlideHeight - (iMarginSlideEdgeTop + iMarginSlideEdgeBottom))
+            Else
+                imageTrimBottom = 0 'スライドに収まる場合はトリミング不要
+             End If
+             
+            .Select
+            
+             .PictureFormat.CropTop = imageTrimTop
+             .PictureFormat.CropLeft = imageTrimLeft
+             .PictureFormat.CropBottom = imageTrimBottom * hiritsu
+             .PictureFormat.CropRight = imageTrimRight
+            
+            .Left = iMarginSlideEdgeLeft
+            .Top = iMarginSlideEdgeTop
+          End With
+           
+      End Select
+            
+    'スライド左上にフォルダ名を表示する---------------------------------
+      a = InStrRev(fol_path, "\") + 1
+      fol_name = Mid(fol_path, a)
+
+      
+    Set txt = sld.Shapes.AddTextbox( _
+      Orientation:=msoTextOrientationHorizontal, _
+      Left:=10, _
+      Top:=20, _
+      Width:=250, _
+      Height:=30)
+
+    With txt
+      .Name = "AddedTextBox"
+      .TextFrame.TextRange = fol_name & "(1／1)"
+      .TextEffect.FontSize = 14
+    End With
+    '-------------------------------------------------------------------
+
+    Next
+  End With
+Fin:
+  ActiveWindow.ViewType = tmp 'ウィンドウの表示モードを元に戻す
+End Sub
+

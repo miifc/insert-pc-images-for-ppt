@@ -1,0 +1,160 @@
+Option Explicit
+ 
+'//[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+'//[[ Function   : 現在のスライドへ画像をタイル状に貼り付け              ]]
+'//[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+Sub addPhotoTilingSlide()
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ 変数定義 ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    Dim i As Integer
+    ' ファイル操作
+    Dim szPath As String
+    Dim objFileSystem As Object
+    Dim objFolder As Object
+    Dim objFile As Object
+    ' スライドのサイズ
+    Dim iSlideWidth As Integer
+    Dim iSlideHeight As Integer
+    ' 貼り付ける画像のサイズ
+    Dim iImageWidth As Integer
+    Dim iImageHeight As Integer
+    ' 画像オブジェクト
+    Dim stImageShape As Shape
+    ' 画像データの横に並べる数
+    Dim iImageColumnCount As Integer
+    ' 画像データの縦に並べる数
+    Dim iImageRowCount As Integer
+    ' 画像データ配置時の隙間指定
+    Dim iMarginSlideEdge As Integer
+    Dim iMarginImage As Integer
+    Dim iMarginSlideEdgeHeight As Integer
+    Dim iMarginImageHeight As Integer
+    Dim iMarginTotal As Integer
+
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ パラメータ指定 ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]'
+    '//[[ 画像データの横に並べる数の指定 ]]
+    iImageColumnCount = 2
+    iImageRowCount = 2
+    '//[[ 画像データ配置の隙間 ]]
+    iMarginSlideEdge = 115
+    iMarginSlideEdgeHeight = 70
+    iMarginImage = 120
+    iMarginImageHeight = 30
+
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ 現在のスライドのサイズをポイントで取得 ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    iSlideWidth = ActivePresentation.PageSetup.SlideWidth
+    iSlideHeight = ActivePresentation.PageSetup.SlideHeight
+    '//[[ マージンの演算 ]]
+    iMarginTotal = iMarginSlideEdge * 2 + iMarginImage * (iImageColumnCount - 1)
+
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ フォルダ選択 ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    szPath = SelectFolderInBrowser()
+
+    ' フォルダ選択されていなければ終了
+    If szPath = "" Then
+        Exit Sub
+    End If
+
+    Set objFileSystem = CreateObject("Scripting.FileSystemObject")
+    Set objFolder = objFileSystem.GetFolder(szPath)
+
+    i = 0
+    For Each objFile In objFolder.Files
+
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        '//[[ 画像の挿入
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        Set stImageShape = ActiveWindow.Selection.SlideRange.Shapes.AddPicture( _
+            FileName:=objFile.Path, _
+            LinkToFile:=msoFalse, _
+            SaveWithDocument:=msoTrue, _
+            Left:=0, _
+            Top:=0)
+
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        '//[[ 画像の縦横比の固定
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        stImageShape.LockAspectRatio = msoTrue
+
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        '//[[ 1枚目の画像から、画像サイズ計算（フォルダ内画像はすべて同じサイズとする）
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        If i = 0 Then
+            iImageWidth = Fix((iSlideWidth - iMarginTotal) / iImageColumnCount)
+            stImageShape.Width = iImageWidth
+            iImageHeight = stImageShape.Height
+        End If
+
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        '//[[ 画像サイズ・位置の指定    ]]
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        stImageShape.Width = iImageWidth
+        stImageShape.Height = iImageHeight
+        stImageShape.Left = iMarginSlideEdge + Int(i / iImageColumnCount) * (iImageWidth + iMarginImage)
+        stImageShape.Top = iMarginSlideEdgeHeight + Int(i Mod iImageColumnCount) * (iImageHeight + iMarginImageHeight)
+
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+        '//[[ 画像が多い場合、スライドの追加 ]]
+        '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+'        If ((i + 1) Mod iImageColumnCount) = 0 And (stImageShape.Top + stImageShape.Height + iMarginImageHeight + iImageHeight) > iSlideHeight Then
+        If ((i + 1) Mod iImageColumnCount) = 0 And (stImageShape.Left + stImageShape.Width + iMarginImage + iImageWidth) > iSlideWidth Then
+            ActivePresentation.Slides.Add( _
+                Index:=ActivePresentation.Slides.Count + 1, _
+                Layout:=ppLayoutBlank).Select
+            i = 0
+            ' スライド追加時にDoEvents（定期的にWindowsへ（ユーザーへ）制御を戻すため）
+            DoEvents
+        Else
+            ' 10回に1度DoEvents（定期的にWindowsへ（ユーザーへ）制御を戻すため）
+            i = i + 1
+            If i Mod 10 = 0 Then
+                DoEvents
+            End If
+        End If
+    Next
+
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ 終了処理]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    Set objFile = Nothing
+    Set objFolder = Nothing
+    Set objFileSystem = Nothing
+    Set stImageShape = Nothing
+
+End Sub
+
+'//[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+'//[[ Function   : フォルダ選択ダイアログ                                       ]]
+'//[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+Private Function SelectFolderInBrowser(Optional vRootFolder As Variant) As String
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ 変数定義                   ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    Dim objFolder As Object
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ フォルダ選択ダイアログ     ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    Set objFolder = CreateObject("Shell.Application").BrowseForFolder( _
+                                 0, _
+                                 "画像フォルダ選択", _
+                                 &H211, _
+                                 vRootFolder)
+
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    '//[[ 選んだパスを取得     ]]
+    '//[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]
+    If Not (objFolder Is Nothing) Then
+        SelectFolderInBrowser = objFolder.Items.Item.Path
+    Else
+        SelectFolderInBrowser = ""
+    End If
+    Set objFolder = Nothing
+End Function
+
